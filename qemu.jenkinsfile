@@ -1,0 +1,130 @@
+def TEST_SYSTEM = 'qemu'
+
+// bind the localtime to docker container to avoid problems of gaps between the
+// localtime of the container and the host.
+// add to group "stack" in order to grant usage of Haskell stack in the docker
+// image
+
+def DOCKER_BASE = 'docker:5000'
+def DOCKER_REGISTRY = 'https://' + DOCKER_BASE
+
+def DOCKER_BUILD_ENV = [
+    registry: DOCKER_REGISTRY,
+    image:    DOCKER_BASE + '/bob:latest',
+    args:     ['-v /etc/localtime:/etc/localtime:ro',
+               '--group-add=sudo'
+              ].join(' ')
+]
+
+def print_step_info(name) { echo "#################### " + name }
+
+pipeline {
+    agent none
+    options {
+        skipDefaultCheckout true
+
+        // unfortunately there is no way to have build discarding conditional
+        // for development branches only, so "master" and "integration" would
+        // keep their builds. The potential work around is having a conditional
+        // stage where "master" and "integration" push a package to an artifact
+        // server, which then preserves this.
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+    stages {
+        stage('build_stage'){
+            agent { label "build" }
+            stages {
+                stage('clean_checkout') {
+                    steps {
+                        print_step_info env.STAGE_NAME
+                        print_step_info env.BRANCH_NAME
+                        print_step_info env.GIT_COMMIT
+                        // print "Commit ID ${commitID}"
+                        // print "buildNum ${buildNum}"
+                        cleanWs()
+                        // everything is in separate folders to avoid file conflicts. Sources are checked out into
+                        // "scm-src", builds should generate "build-xxx" folders, tests will use "workspace_test" ...
+                        dir('scm-src') {
+                            dir('qemu')
+                            {
+                                checkout([$class: 'GitSCM', branches: [[name: '*/'+env.BRANCH_NAME]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'SubmoduleOption', disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, reference: '', trackingSubmodules: false]], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '69537ea1-2bee-4636-b0a8-7b9c0d566b69', url: 'ssh://git@git-server:7999/ext/qemu.git']]])
+                            }
+                        }
+                    }
+                }
+                stage('build') {
+                    agent {
+                        docker {
+                            reuseNode true
+                            alwaysPull true
+                            registryUrl DOCKER_BUILD_ENV.registry
+                            image DOCKER_BUILD_ENV.image
+                            args DOCKER_BUILD_ENV.args
+                        }
+                    }
+                    steps {
+                        print_step_info env.STAGE_NAME
+                        // trigger the build
+                        dir("scm-src") {
+                            dir("qemu") {
+                                sh './build.sh'
+                            }
+                            script
+                            {
+                                withCredentials([sshUserPrivateKey(credentialsId: '69537ea1-2bee-4636-b0a8-7b9c0d566b69', keyFileVariable: 'identity', passphraseVariable: 'pass',  usernameVariable: 'userName')])
+                                {
+                                    // https://github.com/jenkinsci/ssh-steps-plugin
+                                    def remote = [:]
+                                    remote.name = 'hc-artefact'
+                                    remote.host = 'hc-artefact'
+                                    remote.user = userName
+                                    remote.password = pass
+                                    remote.identityFile = identity
+                                    remote.allowAnyHosts = true
+
+                                    def outDir
+                                    if (env.BRANCH_NAME.contains("release"))
+                                    {
+                                        outDir = '/artefacts/release/' + TEST_SYSTEM
+                                    } else {
+                                        outDir = '/artefacts/scratch/' + TEST_SYSTEM
+                                    }
+
+                                    sshCommand remote: remote, command: "mkdir -p " + outDir
+
+                                    findFiles(glob: 'build_output/*.deb').each { debFile ->
+                                        sshPut remote: remote, from: debFile.path, into: outDir
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                stage('cleanup') {
+                    steps{
+                        cleanWs()
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            node("build")
+            {
+                print_step_info 'archive artifacts'
+                cleanWs()
+
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                }
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                }
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                }
+
+                cleanWs()
+                step([$class: 'StashNotifier'])
+            }
+        }
+    }
+}
