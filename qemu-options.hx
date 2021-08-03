@@ -344,15 +344,15 @@ DEF("numa", HAS_ARG, QEMU_OPTION_numa,
     QEMU_ARCH_ALL)
 SRST
 ``-numa node[,mem=size][,cpus=firstcpu[-lastcpu]][,nodeid=node][,initiator=initiator]``
-  \ 
+  \
 ``-numa node[,memdev=id][,cpus=firstcpu[-lastcpu]][,nodeid=node][,initiator=initiator]``
   \
 ``-numa dist,src=source,dst=destination,val=distance``
-  \ 
+  \
 ``-numa cpu,node-id=node[,socket-id=x][,core-id=y][,thread-id=z]``
-  \ 
+  \
 ``-numa hmat-lb,initiator=node,target=node,hierarchy=hierarchy,data-type=tpye[,latency=lat][,bandwidth=bw]``
-  \ 
+  \
 ``-numa hmat-cache,node-id=node,size=size,level=level[,associativity=str][,policy=str][,line=size]``
     Define a NUMA node and assign RAM and VCPUs to it. Set the NUMA
     distance from a source node to a destination node. Set the ACPI
@@ -547,7 +547,7 @@ DEF("global", HAS_ARG, QEMU_OPTION_global,
     QEMU_ARCH_ALL)
 SRST
 ``-global driver.prop=value``
-  \ 
+  \
 ``-global driver=driver,property=property,value=value``
     Set default value of driver's property prop to value, e.g.:
 
@@ -1139,9 +1139,9 @@ SRST
 ``-hda file``
   \
 ``-hdb file``
-  \ 
+  \
 ``-hdc file``
-  \ 
+  \
 ``-hdd file``
     Use file as hard disk 0, 1, 2 or 3 image (see the :ref:`disk images`
     chapter in the System Emulation Users Guide).
@@ -1624,7 +1624,7 @@ DEF("fsdev", HAS_ARG, QEMU_OPTION_fsdev,
 
 SRST
 ``-fsdev local,id=id,path=path,security_model=security_model [,writeout=writeout][,readonly=on][,fmode=fmode][,dmode=dmode] [,throttling.option=value[,throttling.option=value[,...]]]``
-  \ 
+  \
 ``-fsdev proxy,id=id,socket=socket[,writeout=writeout][,readonly=on]``
   \
 ``-fsdev proxy,id=id,sock_fd=sock_fd[,writeout=writeout][,readonly=on]``
@@ -1745,9 +1745,9 @@ DEF("virtfs", HAS_ARG, QEMU_OPTION_virtfs,
 
 SRST
 ``-virtfs local,path=path,mount_tag=mount_tag ,security_model=security_model[,writeout=writeout][,readonly=on] [,fmode=fmode][,dmode=dmode][,multidevs=multidevs]``
-  \ 
+  \
 ``-virtfs proxy,socket=socket,mount_tag=mount_tag [,writeout=writeout][,readonly=on]``
-  \ 
+  \
 ``-virtfs proxy,sock_fd=sock_fd,mount_tag=mount_tag [,writeout=writeout][,readonly=on]``
   \
 ``-virtfs synth,mount_tag=mount_tag``
@@ -4087,10 +4087,10 @@ DEF("mon", HAS_ARG, QEMU_OPTION_mon, \
     "-mon [chardev=]name[,mode=readline|control][,pretty[=on|off]]\n", QEMU_ARCH_ALL)
 SRST
 ``-mon [chardev=]name[,mode=readline|control][,pretty[=on|off]]``
-    Setup monitor on chardev name. ``mode=control`` configures 
+    Setup monitor on chardev name. ``mode=control`` configures
     a QMP monitor (a JSON RPC-style protocol) and it is not the
     same as HMP, the human monitor that has a "(qemu)" prompt.
-    ``pretty`` is only valid when ``mode=control``, 
+    ``pretty`` is only valid when ``mode=control``,
     turning on JSON pretty printing to ease
     human reading and debugging.
 ERST
@@ -4151,7 +4151,7 @@ DEF("overcommit", HAS_ARG, QEMU_OPTION_overcommit,
     QEMU_ARCH_ALL)
 SRST
 ``-overcommit mem-lock=on|off``
-  \ 
+  \
 ``-overcommit cpu-pm=on|off``
     Run qemu with hints about host resource overcommit. The default is
     to assume that host overcommits all resources.
@@ -4533,7 +4533,7 @@ DEF("incoming", HAS_ARG, QEMU_OPTION_incoming, \
     QEMU_ARCH_ALL)
 SRST
 ``-incoming tcp:[host]:port[,to=maxport][,ipv4=on|off][,ipv6=on|off]``
-  \ 
+  \
 ``-incoming rdma:host:port[,ipv4=on|off][,ipv6=on|off]``
     Prepare for incoming migration, listen on a given tcp port.
 
@@ -5267,7 +5267,7 @@ SRST
                [...]
 
     ``-object secret,id=id,data=string,format=raw|base64[,keyid=secretid,iv=string]``
-      \ 
+      \
     ``-object secret,id=id,file=filename,format=raw|base64[,keyid=secretid,iv=string]``
         Defines a secret to store a password, encryption key, or some
         other sensitive data. The sensitive data can either be passed
