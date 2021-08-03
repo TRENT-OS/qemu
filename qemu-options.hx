@@ -3916,7 +3916,8 @@ SRST
         [Linux only] Pseudo TTY (a new PTY is automatically allocated)
 
     ``none``
-        No device is allocated.
+        No serial devices are allocated at all. Use ``null`` to disable a
+        specific serial device.
 
     ``null``
         void device
