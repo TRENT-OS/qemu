@@ -155,6 +155,8 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_PVTIME] =             { 0x090a0000, 0x00010000 },
     [VIRT_SECURE_GPIO] =        { 0x090b0000, 0x00001000 },
     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
+    [VIRT_TIMER0] =             { 0x0b000000, 0x00001000 },
+    [VIRT_TIMER1] =             { 0x0b001000, 0x00001000 },
     /* ...repeating for a total of NUM_VIRTIO_TRANSPORTS, each of that size */
     [VIRT_PLATFORM_BUS] =       { 0x0c000000, 0x02000000 },
     [VIRT_SECURE_MEM] =         { 0x0e000000, 0x01000000 },
@@ -191,6 +193,8 @@ static const int a15irqmap[] = {
     [VIRT_SECURE_UART] = 8,
     [VIRT_ACPI_GED] = 9,
     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
+    [VIRT_TIMER0] = 176,
+    [VIRT_TIMER1] = 177,
     [VIRT_GIC_V2M] = 48, /* ...to 48 + NUM_GICV2M_SPIS - 1 */
     [VIRT_SMMU] = 74,    /* ...to 74 + NUM_SMMU_IRQS - 1 */
     [VIRT_PLATFORM_BUS] = 112, /* ...to 112 + PLATFORM_BUS_NUM_IRQS -1 */
@@ -233,6 +237,60 @@ static void create_randomness(MachineState *ms, const char *node)
     }
     qemu_fdt_setprop_u64(ms->fdt, node, "kaslr-seed", seed.kaslr);
     qemu_fdt_setprop(ms->fdt, node, "rng-seed", seed.rng, sizeof(seed.rng));
+}
+
+static void create_timers(const VirtMachineState *vms)
+{
+    char *timer0_nodename;
+    char *timer1_nodename;
+    hwaddr timer0_base = vms->memmap[VIRT_TIMER0].base;
+    hwaddr timer1_base = vms->memmap[VIRT_TIMER1].base;
+    hwaddr timer0_size = vms->memmap[VIRT_TIMER0].size;
+    hwaddr timer1_size = vms->memmap[VIRT_TIMER1].size;
+
+    int timer0_irq = vms->irqmap[VIRT_TIMER0];
+    int timer1_irq = vms->irqmap[VIRT_TIMER1];
+
+    const char compat[] = "arm,sp804\0arm,primecell";
+    const char clocknames[] = "timerclk0\0timerclk1\0apb_pclk";
+    MachineState *ms = MACHINE(vms);
+
+    sysbus_create_simple("sp804", timer0_base, qdev_get_gpio_in(vms->gic, timer0_irq));
+    sysbus_create_simple("sp804", timer1_base, qdev_get_gpio_in(vms->gic, timer1_irq));
+
+    timer0_nodename = g_strdup_printf("/sp804@%" PRIx64, timer0_base);
+    timer1_nodename = g_strdup_printf("/sp804@%" PRIx64, timer1_base);
+
+    qemu_fdt_add_subnode(ms->fdt, timer0_nodename);
+    qemu_fdt_add_subnode(ms->fdt, timer1_nodename);
+
+    qemu_fdt_setprop(ms->fdt, timer0_nodename, "compatible", compat, sizeof(compat));
+    qemu_fdt_setprop(ms->fdt, timer1_nodename, "compatible", compat, sizeof(compat));
+
+    qemu_fdt_setprop_sized_cells(ms->fdt, timer0_nodename, "reg",
+                                 2, timer0_base, 2, timer0_size);
+    qemu_fdt_setprop_sized_cells(ms->fdt, timer1_nodename, "reg",
+                                 2, timer1_base, 2, timer1_size);
+
+    qemu_fdt_setprop_cells(ms->fdt, timer0_nodename, "interrupts",
+                           GIC_FDT_IRQ_TYPE_SPI, timer0_irq,
+                           GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+    qemu_fdt_setprop_cells(ms->fdt, timer1_nodename, "interrupts",
+                           GIC_FDT_IRQ_TYPE_SPI, timer1_irq,
+                           GIC_FDT_IRQ_FLAGS_LEVEL_HI);
+
+    qemu_fdt_setprop_cells(ms->fdt, timer0_nodename, "clocks",
+                               vms->clock_phandle, vms->clock_phandle);
+    qemu_fdt_setprop_cells(ms->fdt, timer1_nodename, "clocks",
+                               vms->clock_phandle, vms->clock_phandle);
+
+    qemu_fdt_setprop(ms->fdt, timer0_nodename, "clock-names",
+                         clocknames, sizeof(clocknames));
+    qemu_fdt_setprop(ms->fdt, timer1_nodename, "clock-names",
+                         clocknames, sizeof(clocknames));
+
+    g_free(timer0_nodename);
+    g_free(timer1_nodename);
 }
 
 static void create_fdt(VirtMachineState *vms)
@@ -2235,6 +2293,8 @@ static void machvirt_init(MachineState *machine)
     vms->highmem_ecam &= (!firmware_loaded || aarch64);
 
     create_rtc(vms);
+
+    create_timers(vms);
 
     create_pcie(vms);
 
