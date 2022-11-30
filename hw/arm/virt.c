@@ -155,6 +155,9 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_NVDIMM_ACPI] =        { 0x09090000, NVDIMM_ACPI_IO_LEN},
     [VIRT_PVTIME] =             { 0x090a0000, 0x00010000 },
     [VIRT_SECURE_GPIO] =        { 0x090b0000, 0x00001000 },
+    [VIRT_UART2] =              { 0x090c0000, 0x00001000 },
+    [VIRT_UART3] =              { 0x090d0000, 0x00001000 },
+    [VIRT_UART4] =              { 0x090e0000, 0x00001000 },
     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
     /* ...repeating for a total of NUM_VIRTIO_TRANSPORTS, each of that size */
     [VIRT_PLATFORM_BUS] =       { 0x0c000000, 0x02000000 },
@@ -197,6 +200,9 @@ static const int a15irqmap[] = {
     [VIRT_GPIO] = 7,
     [VIRT_UART1] = 8,
     [VIRT_ACPI_GED] = 9,
+    [VIRT_UART2] = 10,
+    [VIRT_UART3] = 11,
+    [VIRT_UART4] = 12,
     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
     [VIRT_GIC_V2M] = 48, /* ...to 48 + NUM_GICV2M_SPIS - 1 */
     [VIRT_SMMU] = 74,    /* ...to 74 + NUM_SMMU_IRQS - 1 */
@@ -2312,9 +2318,22 @@ static void machvirt_init(MachineState *machine)
          */
         Chardev *chr = serial_hd(1);
         if (chr) {
-            create_uart(vms, VIRT_UART1, secure_sysmem, chr);
+            create_uart(vms, VIRT_UART1, sysmem, chr);
         }
         create_uart(vms, VIRT_UART0, sysmem, serial_hd(0));
+    }
+
+    Chardev *chr4 = serial_hd(4);
+    if (chr4) {
+        create_uart(vms, VIRT_UART4, sysmem, chr4);
+    }
+    Chardev *chr3 = serial_hd(3);
+    if (chr3) {
+        create_uart(vms, VIRT_UART3, sysmem, chr3);
+    }
+    Chardev *chr2 = serial_hd(2);
+    if (chr2) {
+        create_uart(vms, VIRT_UART2, sysmem, chr2);
     }
 
     if (tag_sysmem) {
