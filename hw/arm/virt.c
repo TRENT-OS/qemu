@@ -144,11 +144,11 @@ static const MemMapEntry base_memmap[] = {
     [VIRT_GIC_ITS] =            { 0x08080000, 0x00020000 },
     /* This redistributor space allows up to 2*64kB*123 CPUs */
     [VIRT_GIC_REDIST] =         { 0x080A0000, 0x00F60000 },
-    [VIRT_UART] =               { 0x09000000, 0x00001000 },
+    [VIRT_UART0] =              { 0x09000000, 0x00001000 },
     [VIRT_RTC] =                { 0x09010000, 0x00001000 },
     [VIRT_FW_CFG] =             { 0x09020000, 0x00000018 },
     [VIRT_GPIO] =               { 0x09030000, 0x00001000 },
-    [VIRT_SECURE_UART] =        { 0x09040000, 0x00001000 },
+    [VIRT_UART1] =              { 0x09040000, 0x00001000 }, /* secure UART */
     [VIRT_SMMU] =               { 0x09050000, 0x00020000 },
     [VIRT_PCDIMM_ACPI] =        { 0x09070000, MEMORY_HOTPLUG_IO_LEN },
     [VIRT_ACPI_GED] =           { 0x09080000, ACPI_GED_EVT_SEL_LEN },
@@ -193,11 +193,11 @@ static MemMapEntry extended_memmap[] = {
 };
 
 static const int a15irqmap[] = {
-    [VIRT_UART] = 1,
+    [VIRT_UART0] = 1,
     [VIRT_RTC] = 2,
     [VIRT_PCIE] = 3, /* ... to 6 */
     [VIRT_GPIO] = 7,
-    [VIRT_SECURE_UART] = 8,
+    [VIRT_UART1] = 8,
     [VIRT_ACPI_GED] = 9,
     [VIRT_TIMER0] = 10,
     [VIRT_TIMER1] = 11,
@@ -925,15 +925,22 @@ static void create_uart(const VirtMachineState *vms, int uart,
     qemu_fdt_setprop(ms->fdt, nodename, "clock-names",
                          clocknames, sizeof(clocknames));
 
-    if (uart == VIRT_UART) {
+    switch(uart) {
+    case VIRT_UART0:
         qemu_fdt_setprop_string(ms->fdt, "/chosen", "stdout-path", nodename);
-    } else {
-        /* Mark as not usable by the normal world */
-        qemu_fdt_setprop_string(ms->fdt, nodename, "status", "disabled");
-        qemu_fdt_setprop_string(ms->fdt, nodename, "secure-status", "okay");
-
-        qemu_fdt_setprop_string(ms->fdt, "/secure-chosen", "stdout-path",
-                                nodename);
+        break;
+    case VIRT_UART1:
+        if (vms->secure) {
+            /* Mark as not usable by the normal world */
+            qemu_fdt_setprop_string(ms->fdt, nodename, "status", "disabled");
+            qemu_fdt_setprop_string(ms->fdt, nodename, "secure-status", "okay");
+            qemu_fdt_setprop_string(ms->fdt, "/secure-chosen", "stdout-path",
+                                    nodename);
+        }
+        break;
+    default:
+        /* noting special */
+        break;
     }
 
     g_free(nodename);
@@ -2315,11 +2322,43 @@ static void machvirt_init(MachineState *machine)
 
     fdt_add_pmu_nodes(vms);
 
-    create_uart(vms, VIRT_UART, sysmem, serial_hd(0));
-
     if (vms->secure) {
         create_secure_ram(vms, secure_sysmem, secure_tag_sysmem);
-        create_uart(vms, VIRT_SECURE_UART, secure_sysmem, serial_hd(1));
+    }
+
+    /*
+     * The UARTs end up in the DTB there in the reverse order of creation. It
+     * depends on the guest OS, if and how the order affects the device naming
+     * and usage:
+     * - Linux: The 'ttyAMAx' numbers correspondent to the DTB order. The
+     *   console UART is set in the DTB, so changing the order does not affect
+     *   this console output. However, for backwards compatibility the console
+     *   must be kept on 'ttyAMA0'.
+     * - UEFI: The last UART in the DTB is used as console by default. This
+     *   leads to a potential conflict with the console used by Linux if there
+     *   are multiple UARTs.
+     */
+    if (vms->secure) {
+        create_uart(vms, VIRT_UART0, sysmem, serial_hd(0));
+        /* UART1 has always existed in secure configuration. Since it is marked
+         * as secure, Linux (and UEFI?) ignore it.
+         */
+        create_uart(vms, VIRT_UART1, secure_sysmem, serial_hd(1));
+    } else {
+        /* Support of multiple UARTs in the non-secure configuration must take
+         * care not to break backward compatibility. The UART1 device and DTB
+         * node is created only if a backed is explicitly defined, e.g. using
+         * the command line parameter '-serial <backend>', where 'null' creates
+         * a dummy backend. Due to the reversed DTB node order, UART1 appears
+         * second in the DTB. This keeps the Linux behavior the same as when
+         * only one UART exists. However for UEFI's default behavior it means
+         * the output is on UART1 now, because it's the last one in the DTB.
+         */
+        Chardev *chr = serial_hd(1);
+        if (chr) {
+            create_uart(vms, VIRT_UART1, secure_sysmem, chr);
+        }
+        create_uart(vms, VIRT_UART0, sysmem, serial_hd(0));
     }
 
     if (tag_sysmem) {
