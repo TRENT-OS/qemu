@@ -88,6 +88,9 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_APLIC_S] =      {  0xd000000, APLIC_SIZE(VIRT_CPUS_MAX) },
     [VIRT_UART0] =        { 0x10000000,         0x100 },
     [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
+    [VIRT_UART1] =        { 0x10002000,         0x100 },
+    [VIRT_UART2] =        { 0x10003000,         0x100 },
+    [VIRT_UART3] =        { 0x10004000,         0x100 },
     [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
     [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
     [VIRT_IMSIC_M] =      { 0x24000000, VIRT_IMSIC_MAX_SIZE },
@@ -168,6 +171,57 @@ static void virt_flash_map(RISCVVirtState *s,
     virt_flash_map1(s->flash[1], flashbase + flashsize, flashsize,
                     sysmem);
 }
+
+static void create_uart(MemoryRegion *system_memory, const MemMapEntry *memmap,
+                        DeviceState *mmio_irqchip, int uart_id, Chardev *chr)
+{
+    int uart_irq;
+    int num;
+
+    switch (uart_id) {
+    case VIRT_UART0:
+        uart_irq = UART0_IRQ;
+        num = 0;
+        break;
+    case VIRT_UART1:
+        uart_irq = UART1_IRQ;
+        num = 1;
+        break;
+    case VIRT_UART2:
+        uart_irq = UART2_IRQ;
+        num = 2;
+        break;
+    case VIRT_UART3:
+        uart_irq = UART3_IRQ;
+        num = 3;
+        break;
+    default:
+        error_report("uart ID unsupported: %d ", uart_id);
+        exit(1);
+    }
+
+    /*
+     * Get the backend. The first UART must have a backend, for the others a
+     * null-backend is created automatically, so nothing must be given on the
+     * command line for them.
+     */
+    if (!chr)
+    {
+        if (0 == num) {
+            error_report("missing backend for UART #%d", num);
+            exit(1);
+        } else {
+            char *label = g_strdup_printf("serial%d", num);
+            chr = qemu_chr_new_mux_mon(label, "null", NULL);
+            g_free(label);
+        }
+    }
+
+    serial_mm_init(system_memory, memmap[uart_id].base, 0,
+        qdev_get_gpio_in(DEVICE(mmio_irqchip), uart_irq),
+        399193, chr, DEVICE_LITTLE_ENDIAN);
+}
+
 
 static void create_pcie_irq_map(RISCVVirtState *s, void *fdt, char *nodename,
                                 uint32_t irqchip_phandle)
@@ -938,27 +992,50 @@ static void create_fdt_reset(RISCVVirtState *s, const MemMapEntry *memmap,
 }
 
 static void create_fdt_uart(RISCVVirtState *s, const MemMapEntry *memmap,
-                            uint32_t irq_mmio_phandle)
+                            uint32_t irq_mmio_phandle, int uart_id)
 {
     char *name;
     MachineState *ms = MACHINE(s);
+    int uart_irq = -1;
 
-    name = g_strdup_printf("/soc/serial@%lx", (long)memmap[VIRT_UART0].base);
+    switch (uart_id) {
+    case VIRT_UART0:
+        uart_irq = UART0_IRQ;
+        break;
+    case VIRT_UART1:
+        uart_irq = UART1_IRQ;
+        break;
+    case VIRT_UART2:
+        uart_irq = UART2_IRQ;
+        break;
+    case VIRT_UART3:
+        uart_irq = UART3_IRQ;
+        break;
+    default:
+        error_report("uart id unsupported: %d ", uart_id);
+        exit(1);
+    }
+
+    const MemMapEntry *memMapEntry = &memmap[uart_id];
+
+    name = g_strdup_printf("/soc/serial@%lx", (long)memMapEntry->base);
     qemu_fdt_add_subnode(ms->fdt, name);
     qemu_fdt_setprop_string(ms->fdt, name, "compatible", "ns16550a");
     qemu_fdt_setprop_cells(ms->fdt, name, "reg",
-        0x0, memmap[VIRT_UART0].base,
-        0x0, memmap[VIRT_UART0].size);
+        0x0, memMapEntry->base,
+        0x0, memMapEntry->size);
     qemu_fdt_setprop_cell(ms->fdt, name, "clock-frequency", 3686400);
     qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent", irq_mmio_phandle);
     if (s->aia_type == VIRT_AIA_TYPE_NONE) {
-        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", UART0_IRQ);
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", uart_irq);
     } else {
-        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", UART0_IRQ, 0x4);
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", uart_irq, 0x4);
     }
 
-    qemu_fdt_add_subnode(ms->fdt, "/chosen");
-    qemu_fdt_setprop_string(ms->fdt, "/chosen", "stdout-path", name);
+    if (VIRT_UART0 == uart_id) {
+        qemu_fdt_add_subnode(ms->fdt, "/chosen");
+        qemu_fdt_setprop_string(ms->fdt, "/chosen", "stdout-path", name);
+    }
     g_free(name);
 }
 
@@ -1052,7 +1129,10 @@ static void create_fdt(RISCVVirtState *s, const MemMapEntry *memmap)
 
     create_fdt_reset(s, memmap, &phandle);
 
-    create_fdt_uart(s, memmap, irq_mmio_phandle);
+    create_fdt_uart(s, memmap, irq_mmio_phandle, VIRT_UART0);
+    create_fdt_uart(s, memmap, irq_mmio_phandle, VIRT_UART1);
+    create_fdt_uart(s, memmap, irq_mmio_phandle, VIRT_UART2);
+    create_fdt_uart(s, memmap, irq_mmio_phandle, VIRT_UART3);
 
     create_fdt_rtc(s, memmap, irq_mmio_phandle);
 
@@ -1503,9 +1583,10 @@ static void virt_machine_init(MachineState *machine)
 
     create_platform_bus(s, DEVICE(mmio_irqchip));
 
-    serial_mm_init(system_memory, memmap[VIRT_UART0].base,
-        0, qdev_get_gpio_in(DEVICE(mmio_irqchip), UART0_IRQ), 399193,
-        serial_hd(0), DEVICE_LITTLE_ENDIAN);
+    create_uart(system_memory, memmap, mmio_irqchip, VIRT_UART0, serial_hd(0));
+    create_uart(system_memory, memmap, mmio_irqchip, VIRT_UART1, serial_hd(1));
+    create_uart(system_memory, memmap, mmio_irqchip, VIRT_UART2, serial_hd(2));
+    create_uart(system_memory, memmap, mmio_irqchip, VIRT_UART3, serial_hd(3));
 
     sysbus_create_simple("goldfish_rtc", memmap[VIRT_RTC].base,
         qdev_get_gpio_in(DEVICE(mmio_irqchip), RTC_IRQ));

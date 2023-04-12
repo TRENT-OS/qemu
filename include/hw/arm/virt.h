@@ -88,6 +88,9 @@ enum {
     VIRT_PVTIME,
     VIRT_TIMER0,
     VIRT_TIMER1,
+    VIRT_UART2,
+    VIRT_UART3,
+    VIRT_UART4,
     VIRT_LOWMEMMAP_LAST,
 };
 
