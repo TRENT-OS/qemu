@@ -341,6 +341,8 @@ int qemu_chr_wait_connected(Chardev *chr, Error **errp)
 QemuOpts *qemu_chr_parse_compat(const char *label, const char *filename,
                                 bool permit_mux_mon)
 {
+    error_report("qemu_chr_parse_compat '%s', '%s'", label, filename);
+
     char host[65], port[33], width[8], height[8];
     int pos;
     const char *p;
@@ -606,6 +608,8 @@ ChardevBackend *qemu_chr_parse_opts(QemuOpts *opts, Error **errp)
 Chardev *qemu_chr_new_from_opts(QemuOpts *opts, GMainContext *context,
                                 Error **errp)
 {
+    error_report("qemu_chr_new_from_opts");
+
     const ChardevClass *cc;
     Chardev *chr = NULL;
     ChardevBackend *backend = NULL;
@@ -675,6 +679,7 @@ out:
 Chardev *qemu_chr_new_noreplay(const char *label, const char *filename,
                                bool permit_mux_mon, GMainContext *context)
 {
+    error_report("qemu_chr_new_noreplay '%s', '%s'", label, filename);
     const char *p;
     Chardev *chr;
     QemuOpts *opts;
@@ -715,6 +720,7 @@ static Chardev *qemu_chr_new_permit_mux_mon(const char *label,
                                           bool permit_mux_mon,
                                           GMainContext *context)
 {
+    error_report("qemu_chr_new_permit_mux_mon '%s', '%s' -> qemu_chr_new_noreplay", label, filename);
     Chardev *chr;
     chr = qemu_chr_new_noreplay(label, filename, permit_mux_mon, context);
     if (chr) {
@@ -733,12 +739,14 @@ static Chardev *qemu_chr_new_permit_mux_mon(const char *label,
 Chardev *qemu_chr_new(const char *label, const char *filename,
                       GMainContext *context)
 {
+    error_report("qemu_chr_new '%s', '%s' -> qemu_chr_new_permit_mux_mon", label, filename);
     return qemu_chr_new_permit_mux_mon(label, filename, false, context);
 }
 
 Chardev *qemu_chr_new_mux_mon(const char *label, const char *filename,
                               GMainContext *context)
 {
+    error_report("qemu_chr_new_mux_mon '%s', '%s' -> qemu_chr_new_permit_mux_mon", label, filename);
     return qemu_chr_new_permit_mux_mon(label, filename, true, context);
 }
 

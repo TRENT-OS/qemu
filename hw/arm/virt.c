@@ -856,10 +856,15 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
 static void create_uart(const VirtMachineState *vms, int uart,
                         MemoryRegion *mem, Chardev *chr)
 {
+    error_report("create UART ID %d", uart);
+
     char *nodename;
     hwaddr base = vms->memmap[uart].base;
     hwaddr size = vms->memmap[uart].size;
     int irq = vms->irqmap[uart];
+
+    error_report("base 0x%lx, size 0x%lx irq %d", base, size, irq);
+
     const char compat[] = "arm,pl011\0arm,primecell";
     const char clocknames[] = "uartclk\0apb_pclk";
     DeviceState *dev = qdev_new(TYPE_PL011);
@@ -873,6 +878,9 @@ static void create_uart(const VirtMachineState *vms, int uart,
     sysbus_connect_irq(s, 0, qdev_get_gpio_in(vms->gic, irq));
 
     nodename = g_strdup_printf("/pl011@%" PRIx64, base);
+
+    error_report("create FTD nodename %s", nodename);
+
     qemu_fdt_add_subnode(ms->fdt, nodename);
     /* Note that we can't use setprop_string because of the embedded NUL */
     qemu_fdt_setprop(ms->fdt, nodename, "compatible",
@@ -889,11 +897,13 @@ static void create_uart(const VirtMachineState *vms, int uart,
 
     switch(uart) {
     case VIRT_UART0:
+        error_report("FTD: stdout");
         qemu_fdt_setprop_string(ms->fdt, "/chosen", "stdout-path", nodename);
         break;
     case VIRT_UART1:
         if (vms->secure) {
             /* Mark as not usable by the normal world */
+            error_report("FTD: secure stdout");
             qemu_fdt_setprop_string(ms->fdt, nodename, "status", "disabled");
             qemu_fdt_setprop_string(ms->fdt, nodename, "secure-status", "okay");
             qemu_fdt_setprop_string(ms->fdt, "/secure-chosen", "stdout-path",
@@ -2319,22 +2329,22 @@ static void machvirt_init(MachineState *machine)
         Chardev *chr = serial_hd(1);
         if (chr) {
             create_uart(vms, VIRT_UART1, sysmem, chr);
-        }
+        } else { error_report("VIRT_UART1 disabled"); }
         create_uart(vms, VIRT_UART0, sysmem, serial_hd(0));
     }
 
     Chardev *chr4 = serial_hd(4);
     if (chr4) {
         create_uart(vms, VIRT_UART4, sysmem, chr4);
-    }
+    } else { error_report("VIRT_UART4 disabled"); }
     Chardev *chr3 = serial_hd(3);
     if (chr3) {
         create_uart(vms, VIRT_UART3, sysmem, chr3);
-    }
+    } else { error_report("VIRT_UART3 disabled"); }
     Chardev *chr2 = serial_hd(2);
     if (chr2) {
         create_uart(vms, VIRT_UART2, sysmem, chr2);
-    }
+    } else { error_report("VIRT_UART2 disabled"); }
 
     if (tag_sysmem) {
         create_tag_ram(tag_sysmem, vms->memmap[VIRT_MEM].base,
