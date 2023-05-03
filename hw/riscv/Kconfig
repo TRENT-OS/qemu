@@ -84,3 +84,10 @@ config SPIKE
     select HTIF
     select RISCV_ACLINT
     select SIFIVE_PLIC
+
+config MIG_V
+    bool
+    select RISCV_ACLINT
+    select SIFIVE_PLIC
+    select SERIAL
+    select MIG_V_OTP
